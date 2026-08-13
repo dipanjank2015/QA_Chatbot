@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import requests
 
 from dotenv import load_dotenv
 
@@ -18,6 +19,7 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
+LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "QA_Chatbot")
 
 
 # =========================================================
@@ -27,42 +29,85 @@ LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
 if LANGCHAIN_API_KEY:
     os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
-    os.environ["LANGCHAIN_PROJECT"] = "OpenAI-Ollama-Chatbot"
+    os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
 
 
 # =========================================================
-# STREAMLIT PAGE CONFIG
+# STREAMLIT CONFIGURATION
 # =========================================================
 
 st.set_page_config(
-    page_title="OpenAI + Ollama Chatbot",
+    page_title="QA Chatbot",
     page_icon="🤖",
     layout="centered"
 )
 
 
 # =========================================================
+# CHECK OLLAMA
+# =========================================================
+
+def is_ollama_available():
+
+    try:
+        response = requests.get(
+            "http://localhost:11434/api/tags",
+            timeout=2
+        )
+
+        return response.status_code == 200
+
+    except Exception:
+        return False
+
+
+ollama_available = is_ollama_available()
+
+
+# =========================================================
 # TITLE
 # =========================================================
 
-st.title("🤖 OpenAI + Ollama Chatbot")
+st.title("🤖 QA Chatbot")
 
 st.write(
-    "Select a model and ask your question."
+    "Ask questions using OpenAI or a locally hosted Ollama model."
 )
 
 
 # =========================================================
-# MODEL SELECTION
+# MODEL OPTIONS
 # =========================================================
+
+model_options = ["OpenAI"]
+
+if ollama_available:
+    model_options.append("Ollama")
+
 
 model_choice = st.selectbox(
     "Choose your LLM:",
-    [
-        "OpenAI",
-        "Ollama"
-    ]
+    model_options
 )
+
+
+# =========================================================
+# SHOW OLLAMA STATUS
+# =========================================================
+
+if ollama_available:
+
+    st.success(
+        "🦙 Ollama is available. "
+        "You can use a local Ollama model."
+    )
+
+else:
+
+    st.info(
+        "🦙 Ollama is not available. "
+        "Running in cloud mode or Ollama is not running locally."
+    )
 
 
 # =========================================================
@@ -73,8 +118,12 @@ prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "You are a helpful AI assistant. "
-            "Answer the user's questions clearly and accurately."
+            """
+            You are a helpful AI assistant.
+
+            Answer the user's questions clearly,
+            accurately, and concisely.
+            """
         ),
         (
             "user",
@@ -94,9 +143,17 @@ llm = None
 if model_choice == "OpenAI":
 
     if not OPENAI_API_KEY:
+
         st.error(
-            "OPENAI_API_KEY is not found in your .env file."
+            "OPENAI_API_KEY is not configured."
         )
+
+        st.info(
+            "Add OPENAI_API_KEY to your .env file "
+            "when running locally or Streamlit Secrets "
+            "when deployed."
+        )
+
         st.stop()
 
     llm = ChatOpenAI(
@@ -106,6 +163,14 @@ if model_choice == "OpenAI":
 
 
 elif model_choice == "Ollama":
+
+    if not ollama_available:
+
+        st.error(
+            "Ollama is not available."
+        )
+
+        st.stop()
 
     llm = ChatOllama(
         model="llama3.2",
@@ -121,7 +186,7 @@ output_parser = StrOutputParser()
 
 
 # =========================================================
-# CHAIN
+# CREATE CHAIN
 # =========================================================
 
 chain = prompt | llm | output_parser
@@ -154,7 +219,7 @@ if input_text:
                 }
             )
 
-        st.subheader("Response")
+        st.subheader("Answer")
 
         st.write(response)
 
