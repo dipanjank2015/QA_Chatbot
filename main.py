@@ -19,21 +19,25 @@ load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LANGCHAIN_API_KEY = os.getenv("LANGCHAIN_API_KEY")
-LANGCHAIN_PROJECT = os.getenv("LANGCHAIN_PROJECT", "QA_Chatbot")
+LANGCHAIN_PROJECT = os.getenv(
+    "LANGCHAIN_PROJECT",
+    "QA_Chatbot"
+)
 
 
 # =========================================================
-# LANGSMITH CONFIGURATION
+# LANGSMITH
 # =========================================================
 
 if LANGCHAIN_API_KEY:
+
     os.environ["LANGCHAIN_API_KEY"] = LANGCHAIN_API_KEY
     os.environ["LANGCHAIN_TRACING_V2"] = "true"
     os.environ["LANGCHAIN_PROJECT"] = LANGCHAIN_PROJECT
 
 
 # =========================================================
-# STREAMLIT CONFIGURATION
+# STREAMLIT CONFIG
 # =========================================================
 
 st.set_page_config(
@@ -44,24 +48,29 @@ st.set_page_config(
 
 
 # =========================================================
-# CHECK OLLAMA
+# CHECK OLLAMA SERVER
 # =========================================================
 
-def is_ollama_available():
+def check_ollama():
 
     try:
+
         response = requests.get(
             "http://localhost:11434/api/tags",
             timeout=2
         )
 
-        return response.status_code == 200
+        if response.status_code == 200:
+            return True
 
-    except Exception:
+        return False
+
+    except requests.exceptions.RequestException:
+
         return False
 
 
-ollama_available = is_ollama_available()
+ollama_available = check_ollama()
 
 
 # =========================================================
@@ -76,38 +85,43 @@ st.write(
 
 
 # =========================================================
-# MODEL OPTIONS
+# MODEL SELECTION
 # =========================================================
-
-model_options = ["OpenAI"]
-
-if ollama_available:
-    model_options.append("Ollama")
-
 
 model_choice = st.selectbox(
     "Choose your LLM:",
-    model_options
+    [
+        "OpenAI",
+        "Ollama"
+    ]
 )
 
 
 # =========================================================
-# SHOW OLLAMA STATUS
+# OLLAMA STATUS
 # =========================================================
 
-if ollama_available:
+if model_choice == "Ollama":
 
-    st.success(
-        "🦙 Ollama is available. "
-        "You can use a local Ollama model."
-    )
+    if ollama_available:
 
-else:
+        st.success(
+            "🦙 Ollama is available."
+        )
 
-    st.info(
-        "🦙 Ollama is not available. "
-        "Running in cloud mode or Ollama is not running locally."
-    )
+    else:
+
+        st.warning(
+            "⚠️ Ollama is not available in this environment."
+        )
+
+        st.info(
+            "Ollama is only available when an Ollama "
+            "server is accessible. It cannot connect "
+            "to your local PC from Streamlit Cloud."
+        )
+
+        st.stop()
 
 
 # =========================================================
@@ -125,6 +139,7 @@ prompt = ChatPromptTemplate.from_messages(
             accurately, and concisely.
             """
         ),
+
         (
             "user",
             "{question}"
@@ -134,11 +149,8 @@ prompt = ChatPromptTemplate.from_messages(
 
 
 # =========================================================
-# INITIALIZE LLM
+# SELECT LLM
 # =========================================================
-
-llm = None
-
 
 if model_choice == "OpenAI":
 
@@ -146,12 +158,6 @@ if model_choice == "OpenAI":
 
         st.error(
             "OPENAI_API_KEY is not configured."
-        )
-
-        st.info(
-            "Add OPENAI_API_KEY to your .env file "
-            "when running locally or Streamlit Secrets "
-            "when deployed."
         )
 
         st.stop()
@@ -163,14 +169,6 @@ if model_choice == "OpenAI":
 
 
 elif model_choice == "Ollama":
-
-    if not ollama_available:
-
-        st.error(
-            "Ollama is not available."
-        )
-
-        st.stop()
 
     llm = ChatOllama(
         model="llama3.2",
@@ -186,14 +184,14 @@ output_parser = StrOutputParser()
 
 
 # =========================================================
-# CREATE CHAIN
+# CHAIN
 # =========================================================
 
 chain = prompt | llm | output_parser
 
 
 # =========================================================
-# USER INPUT
+# USER QUESTION
 # =========================================================
 
 input_text = st.text_input(
